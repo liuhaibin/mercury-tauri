@@ -144,7 +144,7 @@ pub async fn sync_feed(
         .ok_or("Feed not found".to_string())?;
 
     // Parse feed
-    let (_, articles) = crate::feed_parser::parse_feed_from_url(&feed.url)
+    let (parsed_feed, articles) = crate::feed_parser::parse_feed_from_url(&feed.url)
         .await
         .map_err(|e| format!("Failed to parse feed: {}", e))?;
 
@@ -183,10 +183,11 @@ pub async fn sync_feed(
         }
     }
 
-    // Update feed's article count
+    // Update feed's article count and title (in case the title was stored as a URL/domain)
     let _ = sqlx::query(
-        "UPDATE feeds SET article_count = article_count + ?, unread_count = unread_count + ?, updated_at = ? WHERE id = ?",
+        "UPDATE feeds SET title = ?, article_count = article_count + ?, unread_count = unread_count + ?, updated_at = ? WHERE id = ?",
     )
+    .bind(&parsed_feed.title)
     .bind(new_count)
     .bind(new_count)
     .bind(&now)
@@ -199,6 +200,93 @@ pub async fn sync_feed(
         new_articles: new_count,
         updated_articles: updated_count,
     })
+}
+
+#[command]
+pub async fn sync_all_feeds(
+    db: State<'_, crate::db::DbState>,
+) -> Result<(i32, i32), String> {
+    let feeds = sqlx::query_as::<_, Feed>(
+        "SELECT id, title, url, description, favicon_url, site_url, article_count, unread_count, created_at, updated_at FROM feeds",
+    )
+    .fetch_all(&db.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let mut join_set = JoinSet::new();
+    let mut feed_iter = feeds.into_iter();
+    let pool = db.pool.clone();
+
+    for _ in 0..OPML_IMPORT_CONCURRENCY {
+        if let Some(feed) = feed_iter.next() {
+            join_set.spawn(sync_single_feed(pool.clone(), feed));
+        }
+    }
+
+    let mut synced = 0i32;
+    let mut failed = 0i32;
+
+    while let Some(result) = join_set.join_next().await {
+        match result {
+            Ok(Ok(_)) => synced += 1,
+            _ => failed += 1,
+        }
+        if let Some(feed) = feed_iter.next() {
+            join_set.spawn(sync_single_feed(pool.clone(), feed));
+        }
+    }
+
+    Ok((synced, failed))
+}
+
+async fn sync_single_feed(pool: SqlitePool, feed: Feed) -> Result<(), String> {
+    let (parsed_feed, articles) = crate::feed_parser::parse_feed_from_url(&feed.url)
+        .await
+        .map_err(|e| format!("Failed to parse feed: {}", e))?;
+
+    let now = Utc::now().to_rfc3339();
+    let mut new_count = 0i32;
+
+    for article in articles {
+        let existing: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM articles WHERE url = ?")
+            .bind(&article.url)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if existing == 0 {
+            new_count += 1;
+            let _ = sqlx::query(
+                "INSERT INTO articles (id, feed_id, title, url, content, summary, author, published_at, is_read, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(&feed.id)
+            .bind(&article.title)
+            .bind(&article.url)
+            .bind(&article.content)
+            .bind(article.summary.as_deref())
+            .bind(article.author.as_deref())
+            .bind(&article.published_at)
+            .bind(0)
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await;
+        }
+    }
+
+    let _ = sqlx::query(
+        "UPDATE feeds SET title = ?, article_count = article_count + ?, unread_count = unread_count + ?, updated_at = ? WHERE id = ?",
+    )
+    .bind(&parsed_feed.title)
+    .bind(new_count)
+    .bind(new_count)
+    .bind(&now)
+    .bind(&feed.id)
+    .execute(&pool)
+    .await;
+
+    Ok(())
 }
 
 #[command]
@@ -282,7 +370,7 @@ async fn import_opml_entry(pool: SqlitePool, entry: OpmlFeedEntry) -> Result<Opm
 
     match crate::feed_parser::parse_feed_from_url(&entry.url).await {
         Ok((parsed_feed, articles)) => {
-            let title = entry.title.clone().unwrap_or_else(|| parsed_feed.title.clone());
+            let title = parsed_feed.title.clone();
             let site_url = entry.site_url.clone().or(parsed_feed.site_url.clone());
 
             let insert_result = sqlx::query(

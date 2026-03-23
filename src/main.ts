@@ -515,17 +515,19 @@ function setupEventListeners() {
 
   // Refresh button
   btnRefresh.addEventListener("click", async () => {
-    if (currentFeed) {
-      btnRefresh.disabled = true;
-      try {
+    btnRefresh.disabled = true;
+    try {
+      if (currentFeed) {
         await feedService.syncFeed(currentFeed.id);
-        await loadFeeds();
-        await loadArticles(getCurrentSearchQuery());
-      } catch (error) {
-        console.error("Failed to sync feed:", error);
-      } finally {
-        btnRefresh.disabled = false;
+      } else {
+        await feedService.syncAllFeeds();
       }
+      await loadFeeds();
+      await loadArticles(getCurrentSearchQuery());
+    } catch (error) {
+      console.error("Failed to sync feed(s):", error);
+    } finally {
+      btnRefresh.disabled = false;
     }
   });
 

@@ -28,6 +28,7 @@ pub fn run() {
             commands::feed::add_feed,
             commands::feed::delete_feed,
             commands::feed::sync_feed,
+            commands::feed::sync_all_feeds,
             commands::feed::import_opml,
             commands::article::get_articles,
             commands::article::get_article,

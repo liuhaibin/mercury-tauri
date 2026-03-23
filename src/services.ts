@@ -25,6 +25,10 @@ export const feedService = {
     return invoke("sync_feed", { feedId });
   },
 
+  async syncAllFeeds(): Promise<[number, number]> {
+    return invoke("sync_all_feeds");
+  },
+
   async importOpml(opmlContent: string): Promise<OpmlImportResult> {
     return invoke("import_opml", {
       req: { opml_content: opmlContent },
