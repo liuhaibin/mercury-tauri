@@ -34,6 +34,10 @@ export const feedService = {
       req: { opml_content: opmlContent },
     });
   },
+
+  async starFeed(feedId: string, starred: boolean): Promise<void> {
+    return invoke("star_feed", { feedId, starred });
+  },
 };
 
 export const articleService = {

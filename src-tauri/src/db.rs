@@ -38,6 +38,7 @@ pub async fn init_db(app: &AppHandle) -> Result<DbState, Box<dyn std::error::Err
             site_url TEXT,
             article_count INTEGER DEFAULT 0,
             unread_count INTEGER DEFAULT 0,
+            is_starred INTEGER DEFAULT 0,
             last_sync_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -47,6 +48,11 @@ pub async fn init_db(app: &AppHandle) -> Result<DbState, Box<dyn std::error::Err
     )
     .execute(&pool)
     .await?;
+
+    // Migration: add is_starred for existing databases (ignored if column already exists)
+    let _ = sqlx::query("ALTER TABLE feeds ADD COLUMN is_starred INTEGER DEFAULT 0")
+        .execute(&pool)
+        .await;
 
     sqlx::query(
         r#"

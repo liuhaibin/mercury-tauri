@@ -204,6 +204,52 @@ body {
   background-color: rgba(255, 255, 255, 0.2);
 }
 
+.feed-star {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+
+.feed-star.starred {
+  display: inline-flex;
+  color: #f59e0b;
+}
+
+.feed-star:hover {
+  color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.1);
+}
+
+.feed-item:hover .feed-star {
+  display: inline-flex;
+}
+
+.feed-item.active .feed-star {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.feed-item.active .feed-star.starred {
+  color: #fde68a;
+}
+
+.feed-item.active .feed-star:hover {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.feeds-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 4px 8px;
+}
+
 .sidebar-footer {
   padding: 12px;
   border-top: 1px solid var(--border-color);

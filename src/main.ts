@@ -94,11 +94,10 @@ function renderFeedsList() {
   feedsList.appendChild(allItem);
 
   // Feed items
-  feeds.forEach((feed) => {
-    const isSelected = selectedFeedIds.has(feed.id);
-    const item = document.createElement("div");
-
-    if (isSelectMode) {
+  if (isSelectMode) {
+    feeds.forEach((feed) => {
+      const isSelected = selectedFeedIds.has(feed.id);
+      const item = document.createElement("div");
       item.className = `feed-item select-mode ${isSelected ? "selected" : ""}`;
       item.innerHTML = `
         <span class="feed-checkbox">${isSelected ? "✓" : ""}</span>
@@ -108,7 +107,15 @@ function renderFeedsList() {
         <span class="feed-title">${feed.title}</span>
       `;
       item.addEventListener("click", () => toggleFeedSelection(feed.id));
-    } else {
+      feedsList.appendChild(item);
+    });
+  } else {
+    const starredFeeds = feeds.filter((f) => f.is_starred);
+    const unstarredFeeds = feeds.filter((f) => !f.is_starred);
+    const showDivider = starredFeeds.length > 0 && unstarredFeeds.length > 0;
+
+    const appendFeedItem = (feed: Feed) => {
+      const item = document.createElement("div");
       item.className = `feed-item ${currentFeed?.id === feed.id ? "active" : ""}`;
       const unreadText = feed.unread_count > 0 ? `${feed.unread_count}` : "";
       item.innerHTML = `
@@ -117,8 +124,13 @@ function renderFeedsList() {
         </span>
         <span class="feed-title">${feed.title}</span>
         ${unreadText ? `<span class="feed-count">${unreadText}</span>` : ""}
+        <button class="feed-star${feed.is_starred ? " starred" : ""}" title="${feed.is_starred ? "Unstar" : "Star"}">★</button>
         <button class="feed-delete" title="Delete feed">&times;</button>
       `;
+      item.querySelector(".feed-star")!.addEventListener("click", (e) => {
+        e.stopPropagation();
+        void toggleStarFeed(feed);
+      });
       item.querySelector(".feed-delete")!.addEventListener("click", (e) => {
         e.stopPropagation();
         void deleteFeed(feed);
@@ -128,10 +140,17 @@ function renderFeedsList() {
         void loadArticles(getCurrentSearchQuery());
         updateFeedSelection();
       });
-    }
+      feedsList.appendChild(item);
+    };
 
-    feedsList.appendChild(item);
-  });
+    starredFeeds.forEach(appendFeedItem);
+    if (showDivider) {
+      const divider = document.createElement("div");
+      divider.className = "feeds-divider";
+      feedsList.appendChild(divider);
+    }
+    unstarredFeeds.forEach(appendFeedItem);
+  }
 }
 
 function updateFeedSelection() {
@@ -162,6 +181,16 @@ async function deleteFeed(feed: Feed) {
     await loadFeeds({ reloadArticles: true });
   } catch (error) {
     console.error("Failed to delete feed:", error);
+  }
+}
+
+async function toggleStarFeed(feed: Feed) {
+  try {
+    await feedService.starFeed(feed.id, !feed.is_starred);
+    feeds = await feedService.getFeeds();
+    renderFeedsList();
+  } catch (error) {
+    console.error("Failed to star feed:", error);
   }
 }
 

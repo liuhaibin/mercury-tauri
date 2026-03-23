@@ -30,6 +30,7 @@ pub fn run() {
             commands::feed::sync_feed,
             commands::feed::sync_all_feeds,
             commands::feed::import_opml,
+            commands::feed::star_feed,
             commands::article::get_articles,
             commands::article::get_article,
             commands::article::mark_read,

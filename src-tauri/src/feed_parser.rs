@@ -60,6 +60,7 @@ pub async fn parse_feed(content: &[u8], original_url: &str) -> Result<(Feed, Vec
         site_url,
         article_count: feed_entry.entries.len() as i32,
         unread_count: feed_entry.entries.len() as i32,
+        is_starred: false,
         created_at: now.clone(),
         updated_at: now,
     };

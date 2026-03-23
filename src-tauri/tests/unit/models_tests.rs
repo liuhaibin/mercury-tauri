@@ -11,6 +11,7 @@ fn test_feed_serializes_to_json() {
         site_url: Some("https://example.com".to_string()),
         article_count: 42,
         unread_count: 5,
+        is_starred: false,
         created_at: "2024-01-01T00:00:00Z".to_string(),
         updated_at: "2024-01-02T00:00:00Z".to_string(),
     };
@@ -20,6 +21,7 @@ fn test_feed_serializes_to_json() {
     assert!(json.contains("\"title\":\"Test Feed\""));
     assert!(json.contains("\"article_count\":42"));
     assert!(json.contains("\"unread_count\":5"));
+    assert!(json.contains("\"is_starred\":false"));
 }
 
 #[test]
@@ -33,6 +35,7 @@ fn test_feed_optional_fields_can_be_null() {
         site_url: None,
         article_count: 0,
         unread_count: 0,
+        is_starred: false,
         created_at: "2024-01-01T00:00:00Z".to_string(),
         updated_at: "2024-01-01T00:00:00Z".to_string(),
     };
@@ -41,6 +44,35 @@ fn test_feed_optional_fields_can_be_null() {
     assert!(json.contains("\"description\":null"));
     assert!(json.contains("\"favicon_url\":null"));
     assert!(json.contains("\"site_url\":null"));
+}
+
+#[test]
+fn test_feed_is_starred_serializes_true() {
+    let feed = Feed {
+        id: "feed-3".to_string(),
+        title: "Starred Feed".to_string(),
+        url: "https://example.com/starred".to_string(),
+        description: None,
+        favicon_url: None,
+        site_url: None,
+        article_count: 1,
+        unread_count: 0,
+        is_starred: true,
+        created_at: "2024-01-01T00:00:00Z".to_string(),
+        updated_at: "2024-01-01T00:00:00Z".to_string(),
+    };
+
+    let json = serde_json::to_string(&feed).unwrap();
+    assert!(json.contains("\"is_starred\":true"));
+}
+
+#[test]
+fn test_feed_is_starred_round_trips() {
+    let json = r#"{"id":"f1","title":"T","url":"https://x.com/f","description":null,"favicon_url":null,"site_url":null,"article_count":0,"unread_count":0,"is_starred":true,"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}"#;
+    let feed: Feed = serde_json::from_str(json).unwrap();
+    assert!(feed.is_starred);
+    let round_tripped = serde_json::to_string(&feed).unwrap();
+    assert!(round_tripped.contains("\"is_starred\":true"));
 }
 
 #[test]
