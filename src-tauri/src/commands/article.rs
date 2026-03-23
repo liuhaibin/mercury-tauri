@@ -178,3 +178,7 @@ pub async fn search_articles(
 
     Ok(articles)
 }
+
+#[cfg(test)]
+#[path = "../../tests/commands/article_tests.rs"]
+mod tests;

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 const OPML_IMPORT_CONCURRENCY: usize = 4;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct OpmlFeedEntry {
     url: String,
     title: Option<String>,
@@ -476,3 +476,7 @@ fn extract_opml_feed_entries(opml_content: &str) -> Result<Vec<OpmlFeedEntry>, S
 
     Ok(entries)
 }
+
+#[cfg(test)]
+#[path = "../../tests/commands/feed_tests.rs"]
+mod tests;

@@ -157,13 +157,5 @@ fn extract_favicon_url(site_url: &Option<String>) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_favicon_extraction() {
-        let url = Some("https://example.com/page".to_string());
-        let favicon = extract_favicon_url(&url);
-        assert_eq!(favicon, Some("https://example.com/favicon.ico".to_string()));
-    }
-}
+#[path = "../tests/unit/feed_parser_tests.rs"]
+mod tests;

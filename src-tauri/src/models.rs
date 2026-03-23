@@ -53,3 +53,7 @@ pub struct OpmlImportResult {
     pub skipped: i32,
     pub failed: i32,
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/models_tests.rs"]
+mod tests;
