@@ -90,7 +90,7 @@ jobs:
         run: npx tsc --noEmit
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Tauri build (macOS — produces .dmg)
+  # Tauri build (macOS — compile check, no DMG bundle)
   # Only runs on pushes to main/master, not on every PR to save CI minutes
   # ──────────────────────────────────────────────────────────────────────────
   build-macos:
