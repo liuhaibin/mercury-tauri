@@ -185,11 +185,16 @@ async function deleteFeed(feed: Feed) {
 }
 
 async function toggleStarFeed(feed: Feed) {
+  const nextStarred = !feed.is_starred;
+  feed.is_starred = nextStarred;
+  renderFeedsList();
   try {
-    await feedService.starFeed(feed.id, !feed.is_starred);
+    await feedService.starFeed(feed.id, nextStarred);
     feeds = await feedService.getFeeds();
     renderFeedsList();
   } catch (error) {
+    feed.is_starred = !nextStarred;
+    renderFeedsList();
     console.error("Failed to star feed:", error);
   }
 }
