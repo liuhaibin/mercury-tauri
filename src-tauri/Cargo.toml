@@ -36,5 +36,4 @@ url = "2.5"
 roxmltree = "0.20"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
 
