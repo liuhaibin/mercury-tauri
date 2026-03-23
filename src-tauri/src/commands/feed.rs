@@ -34,7 +34,7 @@ struct OpmlProgressPayload {
 #[command]
 pub async fn get_feeds(db: State<'_, crate::db::DbState>) -> Result<Vec<Feed>, String> {
     let feeds = sqlx::query_as::<_, Feed>(
-        "SELECT id, title, url, description, favicon_url, site_url, article_count, unread_count, created_at, updated_at FROM feeds ORDER BY title COLLATE NOCASE ASC",
+        "SELECT id, title, url, description, favicon_url, site_url, article_count, unread_count, is_starred, created_at, updated_at FROM feeds ORDER BY is_starred DESC, title COLLATE NOCASE ASC",
     )
         .fetch_all(&db.pool)
         .await
@@ -135,7 +135,7 @@ pub async fn sync_feed(
 ) -> Result<FeedSyncResult, String> {
     // Get feed URL
     let feed = sqlx::query_as::<_, Feed>(
-        "SELECT id, title, url, description, favicon_url, site_url, article_count, unread_count, created_at, updated_at FROM feeds WHERE id = ?",
+        "SELECT id, title, url, description, favicon_url, site_url, article_count, unread_count, is_starred, created_at, updated_at FROM feeds WHERE id = ?",
     )
         .bind(&feed_id)
         .fetch_optional(&db.pool)
@@ -207,7 +207,7 @@ pub async fn sync_all_feeds(
     db: State<'_, crate::db::DbState>,
 ) -> Result<(i32, i32), String> {
     let feeds = sqlx::query_as::<_, Feed>(
-        "SELECT id, title, url, description, favicon_url, site_url, article_count, unread_count, created_at, updated_at FROM feeds",
+        "SELECT id, title, url, description, favicon_url, site_url, article_count, unread_count, is_starred, created_at, updated_at FROM feeds",
     )
     .fetch_all(&db.pool)
     .await
@@ -440,6 +440,23 @@ async fn import_opml_entry(pool: SqlitePool, entry: OpmlFeedEntry) -> Result<Opm
             }
         }
     }
+}
+
+#[command]
+pub async fn star_feed(
+    db: State<'_, crate::db::DbState>,
+    feed_id: String,
+    starred: bool,
+) -> Result<(), String> {
+    let now = Utc::now().to_rfc3339();
+    sqlx::query("UPDATE feeds SET is_starred = ?, updated_at = ? WHERE id = ?")
+        .bind(if starred { 1i32 } else { 0i32 })
+        .bind(&now)
+        .bind(&feed_id)
+        .execute(&db.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn extract_opml_feed_entries(opml_content: &str) -> Result<Vec<OpmlFeedEntry>, String> {

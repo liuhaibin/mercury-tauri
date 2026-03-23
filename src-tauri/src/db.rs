@@ -38,6 +38,7 @@ pub async fn init_db(app: &AppHandle) -> Result<DbState, Box<dyn std::error::Err
             site_url TEXT,
             article_count INTEGER DEFAULT 0,
             unread_count INTEGER DEFAULT 0,
+            is_starred INTEGER DEFAULT 0,
             last_sync_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -48,6 +49,19 @@ pub async fn init_db(app: &AppHandle) -> Result<DbState, Box<dyn std::error::Err
     .execute(&pool)
     .await?;
 
+    // Migration: ensure is_starred exists for databases created before this column was added
+    let has_is_starred = sqlx::query_scalar::<_, i64>(
+        "SELECT 1 FROM pragma_table_info('feeds') WHERE name = 'is_starred' LIMIT 1",
+    )
+    .fetch_optional(&pool)
+    .await?
+    .is_some();
+
+    if !has_is_starred {
+        sqlx::query("ALTER TABLE feeds ADD COLUMN is_starred INTEGER DEFAULT 0")
+            .execute(&pool)
+            .await?;
+    }
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS articles (

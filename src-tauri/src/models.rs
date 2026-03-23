@@ -10,6 +10,7 @@ pub struct Feed {
     pub site_url: Option<String>,
     pub article_count: i32,
     pub unread_count: i32,
+    pub is_starred: bool,
     pub created_at: String,
     pub updated_at: String,
 }

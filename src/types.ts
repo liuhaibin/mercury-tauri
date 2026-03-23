@@ -7,6 +7,7 @@ export interface Feed {
   site_url?: string;
   article_count: number;
   unread_count: number;
+  is_starred: boolean;
   created_at: string;
   updated_at: string;
 }

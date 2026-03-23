@@ -23,6 +23,7 @@ const makeFeed = (overrides: Partial<Feed> = {}): Feed => ({
   url: "https://example.com/feed",
   article_count: 10,
   unread_count: 3,
+  is_starred: false,
   created_at: "2024-01-01T00:00:00Z",
   updated_at: "2024-01-01T00:00:00Z",
   ...overrides,
@@ -143,6 +144,38 @@ describe("feedService", () => {
         req: { opml_content: opmlContent },
       });
       expect(result).toEqual(importResult);
+    });
+  });
+
+  describe("starFeed", () => {
+    it("invokes star_feed with feedId and starred=true", async () => {
+      mockInvoke.mockResolvedValueOnce(undefined);
+
+      await feedService.starFeed("feed-1", true);
+
+      expect(mockInvoke).toHaveBeenCalledWith("star_feed", {
+        feedId: "feed-1",
+        starred: true,
+      });
+    });
+
+    it("invokes star_feed with feedId and starred=false to unstar", async () => {
+      mockInvoke.mockResolvedValueOnce(undefined);
+
+      await feedService.starFeed("feed-1", false);
+
+      expect(mockInvoke).toHaveBeenCalledWith("star_feed", {
+        feedId: "feed-1",
+        starred: false,
+      });
+    });
+
+    it("propagates errors from the backend", async () => {
+      mockInvoke.mockRejectedValueOnce(new Error("Feed not found"));
+
+      await expect(feedService.starFeed("bad-id", true)).rejects.toThrow(
+        "Feed not found"
+      );
     });
   });
 });
