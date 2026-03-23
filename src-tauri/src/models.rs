@@ -29,13 +29,6 @@ pub struct Article {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReadState {
-    pub article_id: String,
-    pub is_read: bool,
-    pub read_at: Option<String>,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct AddFeedRequest {
     pub url: String,
