@@ -1,6 +1,7 @@
 import { feedService, articleService } from "./services";
 import type { Feed, Article } from "./types";
 import { Readability } from "@mozilla/readability";
+import { listen } from "@tauri-apps/api/event";
 
 // UI Elements
 const feedsList = document.getElementById("feedsList") as HTMLElement;
@@ -25,6 +26,18 @@ const btnConfirmAdd = document.getElementById("btnConfirmAdd") as HTMLButtonElem
 const btnCancelAdd = document.getElementById("btnCancelAdd") as HTMLButtonElement;
 const btnCloseModal = document.getElementById("btnCloseModal") as HTMLButtonElement;
 const modalMessage = document.getElementById("modalMessage") as HTMLElement;
+const importToast = document.getElementById("importToast") as HTMLElement;
+const importToastTitle = document.getElementById("importToastTitle") as HTMLElement;
+const importToastMessage = document.getElementById("importToastMessage") as HTMLElement;
+const btnDismissImportToast = document.getElementById("btnDismissImportToast") as HTMLButtonElement;
+const btnSelectFeeds = document.getElementById("btnSelectFeeds") as HTMLButtonElement;
+const btnDeleteSelected = document.getElementById("btnDeleteSelected") as HTMLButtonElement;
+const btnCancelSelect = document.getElementById("btnCancelSelect") as HTMLButtonElement;
+const btnSelectAllFeeds = document.getElementById("btnSelectAllFeeds") as HTMLButtonElement;
+const btnClearSelection = document.getElementById("btnClearSelection") as HTMLButtonElement;
+const multiselectBar = document.getElementById("multiselectBar") as HTMLElement;
+const selectedCountEl = document.getElementById("selectedCount") as HTMLElement;
+const btnSettings = document.getElementById("btnSettings") as HTMLButtonElement;
 
 // State
 let currentFeed: Feed | null = null;
@@ -37,6 +50,8 @@ let hasMoreArticles = true;
 let isLoadingMoreArticles = false;
 let articleLoadToken = 0;
 const ARTICLE_PAGE_SIZE = 50;
+let isSelectMode = false;
+const selectedFeedIds = new Set<string>();
 
 // Initialize
 async function init() {
@@ -61,48 +76,60 @@ async function loadFeeds(options?: { reloadArticles?: boolean }) {
 // Render feeds list
 function renderFeedsList() {
   feedsList.innerHTML = "";
-  
-  // Add "All" option
+
+  // "All Articles" row — not selectable in select mode
   const allItem = document.createElement("div");
-  allItem.className = `feed-item ${!currentFeed ? "active" : ""}`;
+  allItem.className = `feed-item ${isSelectMode ? "select-mode-disabled" : (!currentFeed ? "active" : "")}`;
   allItem.innerHTML = `
     <span class="feed-icon">📰</span>
     <span class="feed-title">All Articles</span>
   `;
-  allItem.addEventListener("click", () => {
-    currentFeed = null;
-    void loadArticles(getCurrentSearchQuery());
-    updateFeedSelection();
-  });
-  feedsList.appendChild(allItem);
-
-  // Add feed items
-  feeds.forEach((feed) => {
-    const item = document.createElement("div");
-    item.className = `feed-item ${currentFeed?.id === feed.id ? "active" : ""}`;
-    
-    const unreadText = feed.unread_count > 0 ? `${feed.unread_count}` : "";
-    
-    item.innerHTML = `
-      <span class="feed-icon" style="background-color: ${generateColorFromUrl(feed.url)}; color: white;">
-        ${feed.title.charAt(0).toUpperCase()}
-      </span>
-      <span class="feed-title">${feed.title}</span>
-      ${unreadText ? `<span class="feed-count">${unreadText}</span>` : ""}
-      <button class="feed-delete" title="Delete feed">&times;</button>
-    `;
-
-    item.querySelector(".feed-delete")!.addEventListener("click", (e) => {
-      e.stopPropagation();
-      void deleteFeed(feed);
-    });
-
-    item.addEventListener("click", () => {
-      currentFeed = feed;
+  if (!isSelectMode) {
+    allItem.addEventListener("click", () => {
+      currentFeed = null;
       void loadArticles(getCurrentSearchQuery());
       updateFeedSelection();
     });
-    
+  }
+  feedsList.appendChild(allItem);
+
+  // Feed items
+  feeds.forEach((feed) => {
+    const isSelected = selectedFeedIds.has(feed.id);
+    const item = document.createElement("div");
+
+    if (isSelectMode) {
+      item.className = `feed-item select-mode ${isSelected ? "selected" : ""}`;
+      item.innerHTML = `
+        <span class="feed-checkbox">${isSelected ? "✓" : ""}</span>
+        <span class="feed-icon" style="background-color: ${generateColorFromUrl(feed.url)}; color: white;">
+          ${feed.title.charAt(0).toUpperCase()}
+        </span>
+        <span class="feed-title">${feed.title}</span>
+      `;
+      item.addEventListener("click", () => toggleFeedSelection(feed.id));
+    } else {
+      item.className = `feed-item ${currentFeed?.id === feed.id ? "active" : ""}`;
+      const unreadText = feed.unread_count > 0 ? `${feed.unread_count}` : "";
+      item.innerHTML = `
+        <span class="feed-icon" style="background-color: ${generateColorFromUrl(feed.url)}; color: white;">
+          ${feed.title.charAt(0).toUpperCase()}
+        </span>
+        <span class="feed-title">${feed.title}</span>
+        ${unreadText ? `<span class="feed-count">${unreadText}</span>` : ""}
+        <button class="feed-delete" title="Delete feed">&times;</button>
+      `;
+      item.querySelector(".feed-delete")!.addEventListener("click", (e) => {
+        e.stopPropagation();
+        void deleteFeed(feed);
+      });
+      item.addEventListener("click", () => {
+        currentFeed = feed;
+        void loadArticles(getCurrentSearchQuery());
+        updateFeedSelection();
+      });
+    }
+
     feedsList.appendChild(item);
   });
 }
@@ -135,6 +162,71 @@ async function deleteFeed(feed: Feed) {
     await loadFeeds({ reloadArticles: true });
   } catch (error) {
     console.error("Failed to delete feed:", error);
+  }
+}
+
+function enterSelectMode() {
+  isSelectMode = true;
+  selectedFeedIds.clear();
+  btnSelectFeeds.classList.add("active");
+  btnSettings.style.display = "none";
+  multiselectBar.classList.add("active");
+  updateSelectedCountLabel();
+  renderFeedsList();
+}
+
+function exitSelectMode() {
+  isSelectMode = false;
+  selectedFeedIds.clear();
+  btnSelectFeeds.classList.remove("active");
+  btnSettings.style.display = "";
+  multiselectBar.classList.remove("active");
+  renderFeedsList();
+}
+
+function toggleFeedSelection(feedId: string) {
+  if (selectedFeedIds.has(feedId)) {
+    selectedFeedIds.delete(feedId);
+  } else {
+    selectedFeedIds.add(feedId);
+  }
+  updateSelectedCountLabel();
+  renderFeedsList();
+}
+
+function selectAllFeeds() {
+  selectedFeedIds.clear();
+  feeds.forEach((feed) => {
+    selectedFeedIds.add(feed.id);
+  });
+  updateSelectedCountLabel();
+  renderFeedsList();
+}
+
+function clearSelection() {
+  selectedFeedIds.clear();
+  updateSelectedCountLabel();
+  renderFeedsList();
+}
+
+function updateSelectedCountLabel() {
+  const count = selectedFeedIds.size;
+  selectedCountEl.textContent = count === 0 ? "0 selected" : `${count} selected`;
+  btnDeleteSelected.disabled = count === 0;
+}
+
+async function deleteSelectedFeeds() {
+  if (selectedFeedIds.size === 0) return;
+  const idsToDelete = Array.from(selectedFeedIds);
+  try {
+    await Promise.all(idsToDelete.map((id) => feedService.deleteFeed(id)));
+    if (currentFeed && selectedFeedIds.has(currentFeed.id)) {
+      currentFeed = null;
+    }
+    exitSelectMode();
+    await loadFeeds({ reloadArticles: true });
+  } catch (error) {
+    console.error("Failed to delete selected feeds:", error);
   }
 }
 
@@ -406,6 +498,14 @@ function setupEventListeners() {
   btnCancelAdd.addEventListener("click", closeAddFeedModal);
   btnCloseModal.addEventListener("click", closeAddFeedModal);
   modalOverlay.addEventListener("click", closeAddFeedModal);
+  btnDismissImportToast.addEventListener("click", hideImportToast);
+  btnSelectFeeds.addEventListener("click", () => {
+    if (isSelectMode) exitSelectMode(); else enterSelectMode();
+  });
+  btnSelectAllFeeds.addEventListener("click", selectAllFeeds);
+  btnClearSelection.addEventListener("click", clearSelection);
+  btnCancelSelect.addEventListener("click", exitSelectMode);
+  btnDeleteSelected.addEventListener("click", () => void deleteSelectedFeeds());
 
   // Reader close button
   btnCloseReader.addEventListener("click", () => {
@@ -462,6 +562,7 @@ function openAddFeedModal() {
   modalOverlay.classList.add("active");
   feedUrlInput.focus();
   modalMessage.textContent = "";
+  modalMessage.className = "modal-message";
 }
 
 function closeAddFeedModal() {
@@ -470,6 +571,7 @@ function closeAddFeedModal() {
   feedUrlInput.value = "";
   opmlFileInput.value = "";
   modalMessage.textContent = "";
+  modalMessage.className = "modal-message";
 }
 
 async function handleAddFeed() {
@@ -508,21 +610,47 @@ async function handleImportOpml() {
   const file = opmlFileInput.files?.[0];
   if (!file) return;
 
+  hideImportToast();
   btnImportOpml.disabled = true;
   btnConfirmAdd.disabled = true;
-  showModalMessage("Importing OPML...", "loading");
+  showModalMessage("Preparing import…", "loading");
+
+  // Subscribe to per-feed progress events emitted by the Rust backend.
+  const unlisten = await listen<{
+    current: number;
+    total: number;
+    imported: number;
+    skipped: number;
+    failed: number;
+  }>("opml-progress", (event) => {
+    const { current, total } = event.payload;
+    showModalMessage(
+      total > 0
+        ? `Importing ${current} / ${total} feeds…`
+        : "Importing OPML…",
+      "loading"
+    );
+  });
 
   try {
     const content = await file.text();
     const result = await feedService.importOpml(content);
+    const message = `Imported ${result.imported}/${result.total} feeds (${result.skipped} skipped, ${result.failed} failed).`;
+    const hasFailures = result.failed > 0;
 
-    showModalMessage(
-      `Imported ${result.imported}/${result.total} feeds (${result.skipped} skipped, ${result.failed} failed).`,
-      result.failed > 0 ? "error" : "success"
-    );
-
+    showModalMessage(message, hasFailures ? "error" : "success");
     await loadFeeds({ reloadArticles: true });
     opmlFileInput.value = "";
+
+    showImportToast(
+      hasFailures ? "Import finished with issues" : "Import finished",
+      message,
+      hasFailures ? "error" : "success"
+    );
+
+    if (!hasFailures) {
+      closeAddFeedModal();
+    }
   } catch (error: any) {
     const errorMsg =
       (typeof error === "string" && error) ||
@@ -530,10 +658,26 @@ async function handleImportOpml() {
       error?.toString?.() ||
       "Failed to import OPML";
     showModalMessage(errorMsg, "error");
+    showImportToast("Import failed", errorMsg, "error");
   } finally {
+    unlisten();
     btnImportOpml.disabled = false;
     btnConfirmAdd.disabled = false;
   }
+}
+
+function showImportToast(
+  title: string,
+  message: string,
+  type: "success" | "error"
+) {
+  importToastTitle.textContent = title;
+  importToastMessage.textContent = message;
+  importToast.className = `toast ${type} active`;
+}
+
+function hideImportToast() {
+  importToast.className = "toast";
 }
 
 function showModalMessage(

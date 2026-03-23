@@ -1,13 +1,34 @@
 use crate::models::{AddFeedRequest, Feed, FeedSyncResult, OpmlImportRequest, OpmlImportResult};
 use chrono::Utc;
+use serde::Serialize;
+use sqlx::SqlitePool;
 use std::collections::HashSet;
-use tauri::{command, State};
+use tauri::{command, AppHandle, Emitter, State};
+use tokio::task::JoinSet;
 use uuid::Uuid;
 
+const OPML_IMPORT_CONCURRENCY: usize = 4;
+
+#[derive(Clone)]
 struct OpmlFeedEntry {
     url: String,
     title: Option<String>,
     site_url: Option<String>,
+}
+
+enum OpmlImportOutcome {
+    Imported,
+    Skipped,
+    Failed,
+}
+
+#[derive(Clone, Serialize)]
+struct OpmlProgressPayload {
+    current: i32,
+    total: i32,
+    imported: i32,
+    skipped: i32,
+    failed: i32,
 }
 
 #[command]
@@ -182,6 +203,7 @@ pub async fn sync_feed(
 
 #[command]
 pub async fn import_opml(
+    app: AppHandle,
     db: State<'_, crate::db::DbState>,
     req: OpmlImportRequest,
 ) -> Result<OpmlImportResult, String> {
@@ -192,105 +214,144 @@ pub async fn import_opml(
         .filter(|entry| seen.insert(entry.url.clone()))
         .collect();
 
+    let total = unique_entries.len() as i32;
+    let mut current = 0;
     let mut imported = 0;
     let mut skipped = 0;
     let mut failed = 0;
+    let mut join_set = JoinSet::new();
+    let mut entries = unique_entries.into_iter();
+    let pool = db.pool.clone();
 
-    for entry in &unique_entries {
-        let existing: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM feeds WHERE url = ?")
-            .bind(&entry.url)
-            .fetch_one(&db.pool)
-            .await
-            .map_err(|e| e.to_string())?;
+    // Emit an initial event so the frontend knows the total count immediately.
+    let _ = app.emit("opml-progress", OpmlProgressPayload {
+        current: 0,
+        total,
+        imported: 0,
+        skipped: 0,
+        failed: 0,
+    });
 
-        if existing > 0 {
-            skipped += 1;
-            continue;
+    for _ in 0..OPML_IMPORT_CONCURRENCY {
+        if let Some(entry) = entries.next() {
+            join_set.spawn(import_opml_entry(pool.clone(), entry));
+        }
+    }
+
+    while let Some(result) = join_set.join_next().await {
+        current += 1;
+        match result.map_err(|e| e.to_string())?? {
+            OpmlImportOutcome::Imported => imported += 1,
+            OpmlImportOutcome::Skipped => skipped += 1,
+            OpmlImportOutcome::Failed => failed += 1,
         }
 
-        let now = Utc::now().to_rfc3339();
+        let _ = app.emit("opml-progress", OpmlProgressPayload {
+            current,
+            total,
+            imported,
+            skipped,
+            failed,
+        });
 
-        // Try to fetch the feed to get real metadata and articles
-        match crate::feed_parser::parse_feed_from_url(&entry.url).await {
-            Ok((parsed_feed, articles)) => {
-                let title = entry.title.as_deref().unwrap_or(&parsed_feed.title);
-                let site_url = entry.site_url.as_deref().or(parsed_feed.site_url.as_deref());
-
-                let insert_result = sqlx::query(
-                    "INSERT INTO feeds (id, title, url, description, favicon_url, site_url, article_count, unread_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                )
-                .bind(&parsed_feed.id)
-                .bind(title)
-                .bind(&entry.url)
-                .bind(parsed_feed.description.as_deref())
-                .bind(parsed_feed.favicon_url.as_deref())
-                .bind(site_url)
-                .bind(parsed_feed.article_count)
-                .bind(parsed_feed.unread_count)
-                .bind(&now)
-                .bind(&now)
-                .execute(&db.pool)
-                .await;
-
-                if insert_result.is_ok() {
-                    for article in &articles {
-                        let _ = sqlx::query(
-                            "INSERT OR IGNORE INTO articles (id, feed_id, title, url, content, summary, author, published_at, is_read, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        )
-                        .bind(&article.id)
-                        .bind(&article.feed_id)
-                        .bind(&article.title)
-                        .bind(&article.url)
-                        .bind(&article.content)
-                        .bind(article.summary.as_deref())
-                        .bind(article.author.as_deref())
-                        .bind(&article.published_at)
-                        .bind(0)
-                        .bind(&now)
-                        .bind(&now)
-                        .execute(&db.pool)
-                        .await;
-                    }
-                    imported += 1;
-                } else {
-                    failed += 1;
-                }
-            }
-            Err(_) => {
-                // Fall back to inserting feed with just OPML metadata (no articles)
-                let title = entry.title.clone().unwrap_or_else(|| entry.url.clone());
-
-                let insert_result = sqlx::query(
-                    "INSERT INTO feeds (id, title, url, description, favicon_url, site_url, article_count, unread_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                )
-                .bind(Uuid::new_v4().to_string())
-                .bind(&title)
-                .bind(&entry.url)
-                .bind(None::<&str>)
-                .bind(None::<&str>)
-                .bind(entry.site_url.as_deref())
-                .bind(0)
-                .bind(0)
-                .bind(&now)
-                .bind(&now)
-                .execute(&db.pool)
-                .await;
-
-                if insert_result.is_ok() {
-                    imported += 1;
-                } else {
-                    failed += 1;
-                }
-            }
+        if let Some(entry) = entries.next() {
+            join_set.spawn(import_opml_entry(pool.clone(), entry));
         }
     }
 
     Ok(OpmlImportResult {
-        total: unique_entries.len() as i32,
+        total,
         imported,
         skipped,
         failed,
     })
+}
+
+async fn import_opml_entry(pool: SqlitePool, entry: OpmlFeedEntry) -> Result<OpmlImportOutcome, String> {
+    let existing: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM feeds WHERE url = ?")
+        .bind(&entry.url)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if existing > 0 {
+        return Ok(OpmlImportOutcome::Skipped);
+    }
+
+    let now = Utc::now().to_rfc3339();
+
+    match crate::feed_parser::parse_feed_from_url(&entry.url).await {
+        Ok((parsed_feed, articles)) => {
+            let title = entry.title.clone().unwrap_or_else(|| parsed_feed.title.clone());
+            let site_url = entry.site_url.clone().or(parsed_feed.site_url.clone());
+
+            let insert_result = sqlx::query(
+                "INSERT INTO feeds (id, title, url, description, favicon_url, site_url, article_count, unread_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&parsed_feed.id)
+            .bind(&title)
+            .bind(&entry.url)
+            .bind(parsed_feed.description.as_deref())
+            .bind(parsed_feed.favicon_url.as_deref())
+            .bind(site_url.as_deref())
+            .bind(parsed_feed.article_count)
+            .bind(parsed_feed.unread_count)
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await;
+
+            if insert_result.is_ok() {
+                for article in &articles {
+                    let _ = sqlx::query(
+                        "INSERT OR IGNORE INTO articles (id, feed_id, title, url, content, summary, author, published_at, is_read, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    )
+                    .bind(&article.id)
+                    .bind(&article.feed_id)
+                    .bind(&article.title)
+                    .bind(&article.url)
+                    .bind(&article.content)
+                    .bind(article.summary.as_deref())
+                    .bind(article.author.as_deref())
+                    .bind(&article.published_at)
+                    .bind(0)
+                    .bind(&now)
+                    .bind(&now)
+                    .execute(&pool)
+                    .await;
+                }
+
+                Ok(OpmlImportOutcome::Imported)
+            } else {
+                Ok(OpmlImportOutcome::Failed)
+            }
+        }
+        Err(_) => {
+            let title = entry.title.clone().unwrap_or_else(|| entry.url.clone());
+
+            let insert_result = sqlx::query(
+                "INSERT INTO feeds (id, title, url, description, favicon_url, site_url, article_count, unread_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(&title)
+            .bind(&entry.url)
+            .bind(None::<&str>)
+            .bind(None::<&str>)
+            .bind(entry.site_url.as_deref())
+            .bind(0)
+            .bind(0)
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await;
+
+            if insert_result.is_ok() {
+                Ok(OpmlImportOutcome::Imported)
+            } else {
+                Ok(OpmlImportOutcome::Failed)
+            }
+        }
+    }
 }
 
 fn extract_opml_feed_entries(opml_content: &str) -> Result<Vec<OpmlFeedEntry>, String> {

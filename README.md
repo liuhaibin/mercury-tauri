@@ -6,12 +6,14 @@ Mercury Tauri is a cross-platform desktop RSS reader built with Tauri, Rust, and
 
 - Add RSS/Atom feeds by URL
 - Import feeds from OPML
+- Live OPML import progress with completion toast
 - Sync individual feeds
 - Browse articles with incremental loading (infinite scroll)
 - Search articles
 - Read/unread tracking
 - Sidebar feed list sorted alphabetically (case-insensitive)
 - Delete feeds directly from the sidebar
+- Multi-select feeds and delete them in one action
 - Reader fallback for JS-challenge/anti-bot pages
 
 ## Tech Stack
@@ -78,6 +80,14 @@ invoke("mark_read", { articleId, isRead })
 
 - Feed deletion removes associated articles.
 - SQLite foreign keys are enabled, and backend deletion also explicitly removes articles for reliability.
+- Sidebar supports both inline single-feed delete and bulk delete through select mode.
+- Select mode includes `Select all`, `Clear selection`, `Cancel`, and `Delete` actions.
+
+## OPML Import Notes
+
+- OPML import emits live progress in the Add Feed modal (`current / total`).
+- Feed requests use bounded concurrency and HTTP timeouts to avoid indefinite hangs.
+- A completion toast remains visible until dismissed.
 
 ## Known Reader Behavior
 

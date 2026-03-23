@@ -69,7 +69,15 @@ Once it's running:
 2.5 **Manage feeds**:
    - Hover a feed item in the sidebar
    - Click the "x" button to delete that feed
+   - Or click the select button in the sidebar header to enter multi-select mode
+   - In multi-select mode you can use `Select all`, `Clear selection`, and `Delete`
    - Feed list is sorted alphabetically by name
+
+2.6 **Import OPML**:
+   - Open the Add Feed modal
+   - Click "Import OPML" and choose an `.opml` file
+   - The modal shows live import progress while feeds are processed
+   - When import finishes, a completion toast stays visible until you dismiss it
 
 3. **Read an article**:
    - Click on an article
@@ -128,6 +136,9 @@ invoke("delete_feed", { feedId: string }) -> void
 
 // Sync a feed (refresh articles)
 invoke("sync_feed", { feedId: string }) -> FeedSyncResult
+
+// Import feeds from OPML
+invoke("import_opml", { req: { opml_content: string } }) -> OpmlImportResult
 ```
 
 ### Article Management
@@ -165,6 +176,7 @@ Common causes:
 - Check browser console in dev tools (Ctrl+Shift+I)
 - Look for JavaScript errors
 - Try clearing the browser cache (Ctrl+Shift+Delete)
+- Large OPML imports now show progress in the modal instead of appearing stuck
 
 ### Performance Issues
 - Limit article count: Edit `get_articles` limit in `commands/article.rs`

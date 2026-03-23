@@ -14,9 +14,12 @@
       <aside class="sidebar">
         <div class="sidebar-header">
           <h1 class="app-title">Mercury</h1>
-          <button class="btn-add-feed" id="btnAddFeed" title="Add Feed">
-            <span>+</span>
-          </button>
+          <div class="sidebar-header-actions">
+            <button class="btn-select-feeds" id="btnSelectFeeds" title="Select feeds">&#9745;</button>
+            <button class="btn-add-feed" id="btnAddFeed" title="Add Feed">
+              <span>+</span>
+            </button>
+          </div>
         </div>
 
         <div class="sidebar-content">
@@ -26,9 +29,16 @@
         </div>
 
         <div class="sidebar-footer">
-          <button class="btn-settings" id="btnSettings" title="Settings">
-            ⚙️
-          </button>
+          <button class="btn-settings" id="btnSettings" title="Settings">⚙️</button>
+          <div class="multiselect-bar" id="multiselectBar">
+            <span class="multiselect-count" id="selectedCount">0 selected</span>
+            <div class="multiselect-actions">
+              <button class="btn-secondary-select" id="btnSelectAllFeeds">Select all</button>
+              <button class="btn-secondary-select" id="btnClearSelection">Clear selection</button>
+              <button class="btn-cancel-select" id="btnCancelSelect">Cancel</button>
+              <button class="btn-delete-selected" id="btnDeleteSelected" disabled>Delete</button>
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -110,6 +120,16 @@
 
     <!-- Modal Overlay -->
     <div class="modal-overlay" id="modalOverlay"></div>
+
+    <div class="toast-host" id="toastHost">
+      <div class="toast" id="importToast" role="status" aria-live="polite">
+        <div class="toast-copy">
+          <div class="toast-title" id="importToastTitle">Import finished</div>
+          <div class="toast-message" id="importToastMessage"></div>
+        </div>
+        <button class="toast-action" id="btnDismissImportToast">OK</button>
+      </div>
+    </div>
   </body>
 </html>
 

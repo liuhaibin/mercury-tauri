@@ -1,13 +1,24 @@
 use crate::models::{Article, Feed};
 use chrono::Utc;
 use feed_rs::parser;
+use std::time::Duration;
 use uuid::Uuid;
 
 /// Parse feed from URL and extract metadata
 pub async fn parse_feed_from_url(url: &str) -> Result<(Feed, Vec<Article>), String> {
-    let response = reqwest::get(url)
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15")
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+    let response = client
+        .get(url)
+        .send()
         .await
-        .map_err(|e| format!("Failed to fetch feed: {}", e))?;
+        .map_err(|e| format!("Failed to fetch feed: {}", e))?
+        .error_for_status()
+        .map_err(|e| format!("Feed request failed: {}", e))?;
 
     let content = response.bytes().await.map_err(|e| e.to_string())?;
 
