@@ -124,8 +124,8 @@ function renderFeedsList() {
         </span>
         <span class="feed-title">${feed.title}</span>
         ${unreadText ? `<span class="feed-count">${unreadText}</span>` : ""}
-        <button class="feed-star${feed.is_starred ? " starred" : ""}" title="${feed.is_starred ? "Unstar" : "Star"}">★</button>
-        <button class="feed-delete" title="Delete feed">&times;</button>
+        <button type="button" class="feed-star${feed.is_starred ? " starred" : ""}" title="${feed.is_starred ? "Unstar" : "Star"}">★</button>
+        <button type="button" class="feed-delete" title="Delete feed">&times;</button>
       `;
       item.querySelector(".feed-star")!.addEventListener("click", (e) => {
         e.stopPropagation();
