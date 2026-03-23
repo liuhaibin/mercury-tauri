@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mercury - RSS Reader</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <div class="app-container">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h1 class="app-title">Mercury</h1>
+          <button class="btn-add-feed" id="btnAddFeed" title="Add Feed">
+            <span>+</span>
+          </button>
+        </div>
+
+        <div class="sidebar-content">
+          <nav class="feeds-list" id="feedsList">
+            <!-- Feeds will be populated here -->
+          </nav>
+        </div>
+
+        <div class="sidebar-footer">
+          <button class="btn-settings" id="btnSettings" title="Settings">
+            ⚙️
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="main-content">
+        <!-- Article List -->
+        <section class="articles-panel" id="articlesPanel">
+          <div class="articles-header">
+            <div class="articles-title" id="panelTitle">All Articles</div>
+            <div class="articles-actions">
+              <input
+                type="text"
+                class="search-input"
+                id="searchInput"
+                placeholder="Search articles..."
+              />
+              <button class="btn-refresh" id="btnRefresh" title="Refresh">
+                ↻
+              </button>
+            </div>
+          </div>
+
+          <div class="articles-list" id="articlesList">
+            <!-- Articles will be populated here -->
+          </div>
+        </section>
+
+        <!-- Reader Panel -->
+        <section class="reader-panel" id="readerPanel">
+          <div class="reader-header">
+            <button class="btn-close" id="btnCloseReader" title="Close">
+              ✕
+            </button>
+            <div class="reader-info">
+              <h2 id="readerTitle"></h2>
+              <div class="article-meta">
+                <span id="readerAuthor"></span>
+                <span id="readerDate"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="reader-content" id="readerContent">
+            <!-- Article content will be populated here -->
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Add Feed Modal -->
+    <div class="modal" id="addFeedModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Add Feed</h2>
+          <button class="btn-close" id="btnCloseModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <input
+            type="url"
+            id="feedUrlInput"
+            placeholder="Enter feed URL (RSS, Atom, or JSON Feed)"
+            autocomplete="off"
+          />
+          <input
+            type="file"
+            id="opmlFileInput"
+            accept=".opml,text/x-opml,application/xml,text/xml"
+            class="hidden"
+          />
+          <button class="btn-secondary" id="btnImportOpml">Import OPML</button>
+          <div id="modalMessage" class="modal-message"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="btnCancelAdd">Cancel</button>
+          <button class="btn-primary" id="btnConfirmAdd">Add Feed</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div class="modal-overlay" id="modalOverlay"></div>
+  </body>
+</html>
+
